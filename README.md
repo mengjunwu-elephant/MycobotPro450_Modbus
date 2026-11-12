@@ -79,7 +79,8 @@ with Pro450("COM10", baudrate=115200) as robot:
 | `port` | 必填 | 串口名，如 `COM10`、`/dev/ttyUSB0` |
 | `baudrate` | `115200` | 波特率 |
 | `slave` | `0x2D` | Modbus 从站地址 |
-| `timeout` | `5` | 串口读写超时（秒） |
+| `timeout` | `5` | 普通读写超时（秒） |
+| `motion_timeout` | `300` | 运动到位（`0x5B`）等待超时（秒） |
 | `debug` | `False` | 是否输出 SEND/RECV 帧日志 |
 
 ## 调试日志
@@ -98,6 +99,24 @@ robot = Pro450("COM10", baudrate=115200, debug=True)
 ```
 
 超时、响应过短、CRC 错误会在 `debug=True` 时记录错误日志，并继续抛出异常。
+
+## 运动到位反馈（0x5B）
+
+运动类指令会先收到标准 Modbus `0x10` 写应答，再收到 `0x005B` 到位反馈帧。库会解析第二层反馈并返回状态码（对齐 pymycobot：`0` 表示成功）。
+
+```text
+ACK:     2d 10 <reg> <qty> <crc>          # 8 字节
+到位:    2d 10 00 5b <qty> <status> <crc> # 10 字节，status=0 成功
+```
+
+- `_async=False`（默认，jog 除外）：阻塞等到位，返回状态码
+- `_async=True`：只发送指令，立即返回 `1`（对齐 pymycobot）
+- `jog_angle` / `jog_coord` / `jog_rpy` 默认 `_async=True`
+
+```python
+status = robot.send_angles([0, 0, 0, 0, 0, 0], 20)  # 等到位，返回 0
+robot.send_angles([0, 0, 0, 0, 0, 0], 20, _async=True)  # 不等待，返回 1
+```
 
 ## 主要接口说明
 
@@ -133,12 +152,12 @@ robot = Pro450("COM10", baudrate=115200, debug=True)
 
 | 方法 | 说明 |
 |------|------|
-| `send_angle(joint, angle, speed)` | 单关节运动 |
-| `send_angles(angles, speed)` | 多关节运动 |
-| `send_coord(axis, value, speed)` | 单坐标运动 |
-| `send_coords(coords, speed)` | 多坐标运动 |
-| `jog_angle(...)` / `jog_coord(...)` / `jog_rpy(...)` | 持续运动 / RPY 旋转 |
-| `jog_increment_angle(...)` / `jog_increment_coord(...)` | 角度 / 坐标步进 |
+| `send_angle(joint, angle, speed, _async=False)` | 单关节运动，返回到位状态码 |
+| `send_angles(angles, speed, _async=False)` | 多关节运动，返回到位状态码 |
+| `send_coord(axis, value, speed, _async=False)` | 单坐标运动，返回到位状态码 |
+| `send_coords(coords, speed, _async=False)` | 多坐标运动，返回到位状态码 |
+| `jog_angle(..., _async=True)` / `jog_coord(...)` / `jog_rpy(...)` | 持续运动 / RPY 旋转 |
+| `jog_increment_angle(..., _async=False)` / `jog_increment_coord(...)` | 角度 / 坐标步进 |
 
 单位约定：
 
@@ -175,6 +194,6 @@ pytest
 发布版本建议使用 Git tag：
 
 ```text
-v1.0.0
 v1.0.1
+v1.0.2
 ```

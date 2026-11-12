@@ -120,8 +120,10 @@ class Pro450(ModbusRTU):
         return self.write_multiple_regs(CommandAddress.CLEAR_MOTION_ERROR, [0x0000])
 
     def over_limit_return_zero(self):
-        """超限回零（仅插补模式可使用）"""
-        return self.write_multiple_regs(CommandAddress.RETURN_TO_ZERO, [0x0000])
+        """超限回零（仅插补模式可使用），等待到位反馈"""
+        return self.write_multiple_regs(
+            CommandAddress.RETURN_TO_ZERO, [0x0000], wait_arrival=True
+        )
 
     def servo_restore(self, joint=254):
         """
@@ -132,7 +134,7 @@ class Pro450(ModbusRTU):
         """
         return self.write_multiple_regs(CommandAddress.CLEAR_MOTOR_ERROR, [joint])
 
-    def send_angle(self, joint, angle, speed):
+    def send_angle(self, joint, angle, speed, _async=False):
         """
         单关节控制
 
@@ -140,21 +142,25 @@ class Pro450(ModbusRTU):
             joint: 关节号 1-6
             angle: 目标角度（度）
             speed: 运动速度 1-100
+            _async: True 只发送不等待到位，返回 1；False 等待 0x5B 并返回状态码
         """
         angle_int = int(angle * 100)
         if angle_int < 0:
             angle_int = 65536 + angle_int
 
         values = [joint, angle_int, speed]
-        return self.write_multiple_regs(CommandAddress.SINGLE_ANGLE, values)
+        return self.write_multiple_regs(
+            CommandAddress.SINGLE_ANGLE, values, wait_arrival=True, _async=_async
+        )
 
-    def send_angles(self, angles, speed):
+    def send_angles(self, angles, speed, _async=False):
         """
-        多关节控制（到位后有第二层反馈）
+        多关节控制（到位后有第二层 0x5B 反馈）
 
         Args:
             angles: 6个关节角度列表 [j1, j2, j3, j4, j5, j6]（度）
             speed: 运动速度 1-100
+            _async: True 只发送不等待到位，返回 1；False 等待 0x5B 并返回状态码
         """
         angle_ints = []
         for angle in angles:
@@ -164,9 +170,11 @@ class Pro450(ModbusRTU):
             angle_ints.append(angle_int)
 
         values = angle_ints + [speed]
-        return self.write_multiple_regs(CommandAddress.MULTIPLE_ANGLES, values)
+        return self.write_multiple_regs(
+            CommandAddress.MULTIPLE_ANGLES, values, wait_arrival=True, _async=_async
+        )
 
-    def send_coord(self, joint, coord_value, speed):
+    def send_coord(self, joint, coord_value, speed, _async=False):
         """
         单坐标控制
 
@@ -174,6 +182,7 @@ class Pro450(ModbusRTU):
             joint: 坐标轴 1-6 (1:x, 2:y, 3:z, 4:rx, 5:ry, 6:rz)
             coord_value: 坐标值 (x,y,z单位mm; rx,ry,rz单位度)
             speed: 运动速度 1-100
+            _async: True 只发送不等待到位，返回 1；False 等待 0x5B 并返回状态码
         """
         if joint <= 3:  # x, y, z 坐标
             coord_int = int(coord_value * 10)
@@ -184,15 +193,18 @@ class Pro450(ModbusRTU):
             coord_int = 65536 + coord_int
 
         values = [joint, coord_int, speed]
-        return self.write_multiple_regs(CommandAddress.SINGLE_COORD, values)
+        return self.write_multiple_regs(
+            CommandAddress.SINGLE_COORD, values, wait_arrival=True, _async=_async
+        )
 
-    def send_coords(self, coords, speed):
+    def send_coords(self, coords, speed, _async=False):
         """
         多坐标控制
 
         Args:
             coords: 坐标列表 [x, y, z, rx, ry, rz] (x,y,z单位mm; rx,ry,rz单位度)
             speed: 运动速度 1-100
+            _async: True 只发送不等待到位，返回 1；False 等待 0x5B 并返回状态码
         """
         coord_ints = []
         for i, coord in enumerate(coords):
@@ -206,7 +218,9 @@ class Pro450(ModbusRTU):
             coord_ints.append(coord_int)
 
         values = coord_ints + [speed]
-        return self.write_multiple_regs(CommandAddress.MULTIPLE_COORDS, values)
+        return self.write_multiple_regs(
+            CommandAddress.MULTIPLE_COORDS, values, wait_arrival=True, _async=_async
+        )
 
     def pause(self, gentle_stop=True):
         """
@@ -232,7 +246,7 @@ class Pro450(ModbusRTU):
         stop_type = 1 if mode else 0
         return self.write_multiple_regs(CommandAddress.STOP_MOTION, [stop_type])
 
-    def jog_angle(self, joint, direction, speed):
+    def jog_angle(self, joint, direction, speed, _async=True):
         """
         关节持续运动
 
@@ -240,11 +254,14 @@ class Pro450(ModbusRTU):
             joint: 关节号 1-6
             direction: 运动方向 0/1
             speed: 运动速度 1-100
+            _async: 默认 True（对齐 pymycobot）；False 时等待到位反馈
         """
         values = [joint, direction, speed]
-        return self.write_multiple_regs(CommandAddress.CONTINUOUS_JOINT, values)
+        return self.write_multiple_regs(
+            CommandAddress.CONTINUOUS_JOINT, values, wait_arrival=True, _async=_async
+        )
 
-    def jog_coord(self, axis, direction, speed):
+    def jog_coord(self, axis, direction, speed, _async=True):
         """
         坐标持续运动
 
@@ -252,11 +269,14 @@ class Pro450(ModbusRTU):
             axis: 坐标轴 1-6 (1:x, 2:y, 3:z, 4:rx, 5:ry, 6:rz)
             direction: 运动方向 0/1
             speed: 运动速度 1-100
+            _async: 默认 True（对齐 pymycobot）；False 时等待到位反馈
         """
         values = [axis, direction, speed]
-        return self.write_multiple_regs(CommandAddress.CONTINUOUS_COORD, values)
+        return self.write_multiple_regs(
+            CommandAddress.CONTINUOUS_COORD, values, wait_arrival=True, _async=_async
+        )
 
-    def jog_rpy(self, axis, direction, speed):
+    def jog_rpy(self, axis, direction, speed, _async=True):
         """
         RPY旋转
 
@@ -264,32 +284,39 @@ class Pro450(ModbusRTU):
             axis: 旋转轴 1-Roll, 2-Pitch, 3-Yaw
             direction: 旋转方向 0/1
             speed: 旋转速度 1-100
+            _async: 默认 True（对齐 pymycobot）；False 时等待到位反馈
         """
         values = [axis, direction, speed]
-        return self.write_multiple_regs(CommandAddress.RPY_ROTATION, values)
+        return self.write_multiple_regs(
+            CommandAddress.RPY_ROTATION, values, wait_arrival=True, _async=_async
+        )
 
-    def jog_increment_angle(self, joint, step_angle, speed):
+    def jog_increment_angle(self, joint, step_angle, speed, _async=False):
         """
         角度步进
 
         Args:
             joint: 关节号 1-6
             step_angle: 步进角度（度）
+            _async: True 只发送不等待到位，返回 1
         """
         step_int = int(step_angle * 100)
         if step_int < 0:
             step_int = 65536 + step_int
 
         values = [joint, step_int, speed]
-        return self.write_multiple_regs(CommandAddress.STEP_ANGLE, values)
+        return self.write_multiple_regs(
+            CommandAddress.STEP_ANGLE, values, wait_arrival=True, _async=_async
+        )
 
-    def jog_increment_coord(self, axis, step_value, speed):
+    def jog_increment_coord(self, axis, step_value, speed, _async=False):
         """
         坐标步进
 
         Args:
             axis: 坐标轴 1-6
             step_value: 步进值 (x,y,z单位mm; rx,ry,rz单位度)
+            _async: True 只发送不等待到位，返回 1
         """
         if axis <= 3:  # x, y, z
             step_int = int(step_value * 10)
@@ -300,7 +327,9 @@ class Pro450(ModbusRTU):
             step_int = 65536 + step_int
 
         values = [axis, step_int, speed]
-        return self.write_multiple_regs(CommandAddress.STEP_COORD, values)
+        return self.write_multiple_regs(
+            CommandAddress.STEP_COORD, values, wait_arrival=True, _async=_async
+        )
 
     def set_motor_enable(self, joint, state):
         """

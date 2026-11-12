@@ -32,6 +32,7 @@ class CommandAddress:
     PAUSE_MOTION = 0x0026  # 运动暂停
     RESUME_MOTION = 0x0028  # 运动继续
     STOP_MOTION = 0x0029  # 运动停止
+    ARRIVAL_FEEDBACK = 0x005B  # 到位反馈（运动第二层返回）
 
     # 持续运动指令
     CONTINUOUS_JOINT = 0x0030  # 关节持续运动
